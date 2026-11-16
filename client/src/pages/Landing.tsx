@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 import { Button } from "../components/ui/button";
 import { Show, UserButton } from "@clerk/react";
+import { DemoLogin } from "../components/DemoLogin";
 
 export default function Landing() {
   return (
@@ -33,6 +34,9 @@ export default function Landing() {
           <Button size="lg" render={<Link to="/sign-up" />}>
             Get Started
           </Button>
+        </div>
+        <div className="mt-10 flex justify-center">
+          <DemoLogin />
         </div>
       </main>
     </div>

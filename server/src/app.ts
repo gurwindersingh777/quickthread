@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import { clerkMiddleware } from '@clerk/express';
 import { meRouter } from './routes/me.js';
 import { env } from './config/env.js';
+import { demoRouter } from './routes/demo.js';
 
 export const app = express();
 
@@ -24,6 +25,7 @@ app.get('/api/health', (_req, res) => {
 });
 
 app.use('/api/me', meRouter);
+app.use('/api/demo', demoRouter);
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   console.error(err);

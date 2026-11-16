@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import { clerkClient, getAuth } from '@clerk/express';
-import { User, type UserDocument } from '../models/User.js';
+import { User, UserRole, type UserDocument } from '../models/User.js';
 
 export async function requireUser(req: Request, res: Response, next: NextFunction) {
   const { userId } = getAuth(req);
@@ -38,4 +38,14 @@ export async function requireUser(req: Request, res: Response, next: NextFunctio
 
 export function currentUser(res: Response) {
   return res.locals.user as UserDocument;
+}
+
+export function requireRole(role: UserRole) {
+  return (_req: Request, res: Response, next: NextFunction) => {
+    if (currentUser(res).role !== role) {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+    next();
+  };
 }
