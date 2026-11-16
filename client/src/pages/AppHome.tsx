@@ -1,10 +1,10 @@
+import { Link } from 'react-router'
 import { UserButton } from '@clerk/react'
 import { useMe } from '../hooks/useMe'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Skeleton } from '../components/ui/skeleton'
-import { Button } from '../components/ui/button'
+import { Button, buttonVariants } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
-
 
 export default function AppHome() {
   const { data: me, isPending, isError, error, refetch } = useMe()
@@ -13,7 +13,15 @@ export default function AppHome() {
     <div className="min-h-screen bg-background">
       <header className="flex items-center justify-between border-b p-4">
         <span className="font-semibold">Quickthread</span>
-        <UserButton />
+        <div className="flex items-center gap-3">
+          <Link
+            to="/app/accounts"
+            className={buttonVariants({ variant: 'ghost', size: 'sm' })}
+          >
+            Accounts
+          </Link>
+          <UserButton />
+        </div>
       </header>
 
       <main className="mx-auto max-w-md p-6">

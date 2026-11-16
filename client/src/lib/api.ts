@@ -1,6 +1,6 @@
 const BASE_URL = import.meta.env.VITE_API_URL ?? ''
 
-type RequestOptions = {
+export type RequestOptions = {
   method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
   body?: unknown
   token?: string | null
