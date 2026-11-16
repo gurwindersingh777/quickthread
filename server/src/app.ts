@@ -7,7 +7,8 @@ import { env } from './config/env.js';
 export const app = express();
 
 app.use(helmet());
-app.use(cors({ origin: env.CLIENT_URL }));
+const allowedOrigins = env.CLIENT_URL.split(',').map((o) => o.trim());
+app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 
 app.get('/api/health', (_req, res) => {
