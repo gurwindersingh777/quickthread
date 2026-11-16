@@ -1,7 +1,13 @@
-import { UserButton, useUser } from '@clerk/react'
+import { UserButton } from '@clerk/react'
+import { useMe } from '../hooks/useMe'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
+import { Skeleton } from '../components/ui/skeleton'
+import { Button } from '../components/ui/button'
+import { Badge } from '../components/ui/badge'
+
 
 export default function AppHome() {
-  const { user } = useUser()
+  const { data: me, isPending, isError, error, refetch } = useMe()
 
   return (
     <div className="min-h-screen bg-background">
@@ -9,13 +15,34 @@ export default function AppHome() {
         <span className="font-semibold">Quickthread</span>
         <UserButton />
       </header>
-      <main className="p-6">
-        <h1 className="text-2xl font-semibold">
-          Welcome, {user?.firstName ?? user?.primaryEmailAddress?.emailAddress}
-        </h1>
-        <p className="mt-2 text-muted-foreground">
-          The assistant dashboard arrives in Phase 4.
-        </p>
+
+      <main className="mx-auto max-w-md p-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Your account</CardTitle>
+            <CardDescription>Loaded from the Quickthread API</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {isPending && <Skeleton className="h-16 w-full" />}
+
+            {isError && (
+              <div className="space-y-2">
+                <p className="text-sm text-destructive">{error.message}</p>
+                <Button variant="outline" size="sm" onClick={() => refetch()}>
+                  Retry
+                </Button>
+              </div>
+            )}
+
+            {me && (
+              <div className="space-y-1 text-sm">
+                <p className="text-base font-medium">{me.name || me.email}</p>
+                <p className="text-muted-foreground">{me.email}</p>
+                <Badge variant="secondary">{me.role}</Badge>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </main>
     </div>
   )
