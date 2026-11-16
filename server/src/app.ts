@@ -6,6 +6,7 @@ import { clerkMiddleware } from '@clerk/express';
 import { meRouter } from './routes/me.js';
 import { env } from './config/env.js';
 import { demoRouter } from './routes/demo.js';
+import { accountsRouter } from './routes/accounts.js';
 
 export const app = express();
 
@@ -26,6 +27,7 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api/me', meRouter);
 app.use('/api/demo', demoRouter);
+app.use('/api/accounts', accountsRouter);
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   console.error(err);

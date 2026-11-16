@@ -3,6 +3,7 @@ import { clerkClient } from '@clerk/express';
 import { DEMO_ACCOUNTS } from '../demo.js';
 import { User } from '../models/User.js';
 import { connectDB } from '../config/db.js';
+import { importSampleInbox } from '../services/inbox.js';
 
 async function ensureClerkUser(email: string, firstName: string) {
   const existing = await clerkClient.users.getUserList({ emailAddress: [email] });
@@ -42,6 +43,13 @@ async function main() {
     { new: true, upsert: true },
   );
 
+  const reset = process.argv.includes('--reset');
+  const inbox = await importSampleInbox(alice._id, 'gmail', { reset });
+  console.log(
+    inbox.created
+      ? `Imported ${inbox.imported} sample threads into Alice's connected Gmail account`
+      : "Alice already has a connected inbox (run 'npm run seed:reset' to re-import it)",
+  );
   console.log('Seeded demo users: Alice (assistant) and James (client, managed by Alice)');
   await mongoose.disconnect();
 }

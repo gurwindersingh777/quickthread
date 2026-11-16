@@ -10,7 +10,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "seed:users": "tsx src/seed/users.ts"
+    "seed:users": "tsx src/seed/users.ts",
+    "seed:reset": "tsx src/seed/users.ts --reset"
   },
   "dependencies": {
     "@clerk/express": "^2.1.90",
