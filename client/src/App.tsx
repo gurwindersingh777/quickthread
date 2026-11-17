@@ -1,16 +1,20 @@
-import { Route, Routes } from 'react-router'
+import { Navigate, Route, Routes } from 'react-router'
+import { Toaster } from 'sonner'
 import Landing from './pages/Landing'
 import SignInPage from './pages/SignInPage'
+import SignUpPage from './pages/SignUpPage'
 import HealthCheck from './pages/HealthCheck'
 import { ProtectedRoute } from './components/ProtectedRoute'
-import AppHome from './pages/AppHome'
-import SignUpPage from './pages/SignUpPage'
 import { RoleRoute } from './components/RoleRoute'
-import ClientHome from './components/ClientHome'
-import { Toaster } from 'sonner'
-import AccountsPage from './pages/AccountsPage'
 import Onboarding from './pages/Onboarding'
 import { OnboardingGate } from './components/OnboardingGate'
+import { AppShell } from './components/shell/AppShell'
+import Dashboard from './pages/Dashboard'
+import InboxPage from './pages/InboxPage'
+import ThreadView from './pages/ThreadView'
+import AccountsPage from './pages/AccountsPage'
+import ClientHome from './components/ClientHome'
+
 
 export default function App() {
   return (
@@ -24,9 +28,16 @@ export default function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<RoleRoute role="assistant" />}>
             <Route path="/onboarding" element={<Onboarding />} />
+
             <Route element={<OnboardingGate />}>
-              <Route path="/app" element={<AppHome />} />
-              <Route path="/app/accounts" element={<AccountsPage />} />
+              <Route element={<AppShell />}>
+                <Route path="/app" element={<Dashboard />} />
+                <Route path="/app/inbox" element={<Navigate to="/app/inbox/all" replace />} />
+                <Route path="/app/inbox/:segment" element={<InboxPage />}>
+                  <Route path=":threadId" element={<ThreadView />} />
+                </Route>
+                <Route path="/app/accounts" element={<AccountsPage />} />
+              </Route>
             </Route>
           </Route>
 

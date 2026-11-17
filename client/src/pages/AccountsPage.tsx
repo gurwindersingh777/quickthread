@@ -1,6 +1,5 @@
 import { Link } from 'react-router'
-import { UserButton } from '@clerk/react'
-import { ArrowLeft, Loader2, Mail, Plus, RefreshCw } from 'lucide-react'
+import { Loader2, Mail, Plus, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   AlertDialog,
@@ -14,7 +13,7 @@ import {
   AlertDialogTrigger,
 } from '../components/ui/alert-dialog'
 import { Badge } from '../components/ui/badge'
-import { Button, buttonVariants } from '../components/ui/button'
+import { Button } from '../components/ui/button'
 import { Card, CardContent } from '../components/ui/card'
 import { Skeleton } from '../components/ui/skeleton'
 import {
@@ -120,60 +119,50 @@ export default function AccountsPage() {
   const { data: accounts, isPending, isError, error, refetch } = useAccounts()
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      <header className="flex items-center justify-between border-b bg-background p-4">
-        <Link to="/app" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to inbox
-        </Link>
-        <UserButton />
-      </header>
+    <div className="mx-auto max-w-2xl space-y-6 p-4 sm:p-6">
+      <div>
+        <h1 className="text-2xl font-semibold">Connected accounts</h1>
+        <p className="text-sm text-muted-foreground">
+          Manage the mailboxes Quickthread keeps in sync.
+        </p>
+      </div>
 
-      <main className="mx-auto max-w-2xl space-y-6 p-6">
-        <div>
-          <h1 className="text-2xl font-semibold">Connected accounts</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage the mailboxes Quickthread keeps in sync.
-          </p>
+      {isPending && (
+        <div className="space-y-3">
+          <Skeleton className="h-36 w-full" />
+          <Skeleton className="h-36 w-full" />
         </div>
+      )}
 
-        {isPending && (
+      {isError && (
+        <div className="space-y-2">
+          <p className="text-sm text-destructive">{error.message}</p>
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
+            Retry
+          </Button>
+        </div>
+      )}
+
+      {accounts && (
+        <>
           <div className="space-y-3">
-            <Skeleton className="h-36 w-full" />
-            <Skeleton className="h-36 w-full" />
+            {accounts.map((account) => (
+              <AccountCard key={account.id} account={account} />
+            ))}
           </div>
-        )}
 
-        {isError && (
-          <div className="space-y-2">
-            <p className="text-sm text-destructive">{error.message}</p>
-            <Button variant="outline" size="sm" onClick={() => refetch()}>
-              Retry
+          {accounts.length < 2 ? (
+            <Button variant="outline" render={<Link to="/onboarding?add=1" />}>
+              <Plus className="mr-2 h-4 w-4" />
+              Connect another account
             </Button>
-          </div>
-        )}
-
-        {accounts && (
-          <>
-            <div className="space-y-3">
-              {accounts.map((account) => (
-                <AccountCard key={account.id} account={account} />
-              ))}
-            </div>
-
-            {accounts.length < 2 ? (
-              <Link to="/onboarding?add=1" className={buttonVariants({ variant: 'outline' })}>
-                <Plus className="mr-2 h-4 w-4" />
-                Connect another account
-              </Link>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Both supported providers are connected.
-              </p>
-            )}
-          </>
-        )}
-      </main>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Both supported providers are connected.
+            </p>
+          )}
+        </>
+      )}
     </div>
   )
 }
