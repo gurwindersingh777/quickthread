@@ -76,7 +76,7 @@ export function useThreadStats() {
   })
 }
 
-type ThreadChanges = Partial<
+export type ThreadChanges = Partial<
   Pick<ThreadListItem, 'isRead' | 'isImportant' | 'isArchived' | 'status'>
 >
 
@@ -93,5 +93,36 @@ export function useUpdateThread() {
         queryClient.invalidateQueries({ queryKey: ['thread-stats'] }),
         queryClient.invalidateQueries({ queryKey: ['thread'] }),
       ]),
+  })
+}
+
+export type ThreadMessage = {
+  id: string
+  fromName: string
+  fromEmail: string
+  to: string[]
+  body: string
+  sentAt: string
+  direction: 'incoming' | 'outgoing'
+}
+
+export type ThreadDetail = ThreadListItem & {
+  participants: { name: string; email: string }[]
+  clientDecision: { action: 'handled' | 'handoff'; note: string; at: string } | null
+  messages: ThreadMessage[]
+}
+
+export function useThread(id: string | undefined) {
+  const { isLoaded, isSignedIn, userId } = useAuth()
+  const api = useApi()
+
+  return useQuery({
+    queryKey: ['thread', userId, id],
+    queryFn: () => api<ThreadDetail>(`/api/threads/${id}`),
+    enabled: isLoaded && !!isSignedIn && !!id,
+    refetchInterval: REFRESH_MS,
+    // A missing conversation won't appear on a retry
+    retry: (failureCount, error) =>
+      failureCount < 1 && !error.message.toLowerCase().includes('not found'),
   })
 }
