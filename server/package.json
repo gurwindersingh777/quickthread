@@ -11,7 +11,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "seed:users": "tsx src/seed/users.ts",
-    "seed:reset": "tsx src/seed/users.ts --reset"
+    "seed:reset": "tsx src/seed/users.ts --reset",
+    "eval:ai": "tsx src/scripts/evalClassifier.ts"
   },
   "dependencies": {
     "@clerk/express": "^2.1.90",
