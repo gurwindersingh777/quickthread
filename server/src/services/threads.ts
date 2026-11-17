@@ -25,19 +25,24 @@ export function toListDto(t: ThreadDocument) {
     classifiedBy: t.override ? ('manual' as const) : t.ai ? ('ai' as const) : null,
     confidence,
     needsReview: !t.override && confidence !== null && confidence < CONFIDENCE_THRESHOLD,
+    analysis: t.analysis
+      ? { status: t.analysis.status, error: t.analysis.error ?? null }
+      : null,
     ai: t.ai
       ? {
-          summary: t.ai.summary ?? null,
-          reason: t.ai.reason ?? null,
-          category: t.ai.category ?? null,
-          actionRequired: t.ai.actionRequired ?? false,
-          waitingForReply: t.ai.waitingForReply ?? false,
-          extractedDates: (t.ai.extractedDates ?? []).map((d) => ({
-            label: d.label ?? '',
-            date: d.date ?? null,
-            kind: d.kind ?? 'other',
-          })),
-        }
+        summary: t.ai.summary ?? null,
+        uncertainty: t.ai.uncertainty ?? [],
+        model: t.ai.model ?? null,
+        reason: t.ai.reason ?? null,
+        category: t.ai.category ?? null,
+        actionRequired: t.ai.actionRequired ?? false,
+        waitingForReply: t.ai.waitingForReply ?? false,
+        extractedDates: (t.ai.extractedDates ?? []).map((d) => ({
+          label: d.label ?? '',
+          date: d.date ?? null,
+          kind: d.kind ?? 'other',
+        })),
+      }
       : null,
   };
 }

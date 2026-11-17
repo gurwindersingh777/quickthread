@@ -4,6 +4,7 @@ import { DEMO_ACCOUNTS } from '../demo.js';
 import { User } from '../models/User.js';
 import { connectDB } from '../config/db.js';
 import { importSampleInbox } from '../services/inbox.js';
+import { waitForIdle } from '../services/analysis.js';
 
 async function ensureClerkUser(email: string, firstName: string) {
   const existing = await clerkClient.users.getUserList({ emailAddress: [email] });
@@ -26,7 +27,7 @@ async function main() {
   const alice = await User.findOneAndUpdate(
     { email: assistant.email },
     { $set: { clerkId: aliceClerk.id, name: assistant.firstName, role: 'assistant' } },
-    { new: true, upsert: true },
+    { returnDocument: 'after', upsert: true },
   );
   if (!alice) throw new Error('Failed to seed the assistant');
 
@@ -40,7 +41,7 @@ async function main() {
         assistantId: alice._id,
       },
     },
-    { new: true, upsert: true },
+    { returnDocument: 'after', upsert: true },
   );
 
   const reset = process.argv.includes('--reset');
@@ -50,6 +51,10 @@ async function main() {
       ? `Imported ${inbox.imported} sample threads into Alice's connected Gmail account`
       : "Alice already has a connected inbox (run 'npm run seed:reset' to re-import it)",
   );
+  if (inbox.created) {
+    console.log('Analyzing conversations with AI. This takes a few minutes on the free tier...');
+    await waitForIdle();
+  }
   console.log('Seeded demo users: Alice (assistant) and James (client, managed by Alice)');
   await mongoose.disconnect();
 }

@@ -2,6 +2,7 @@ import type { Types } from 'mongoose';
 import { EmailAccount, type Provider } from '../models/EmailAccount.js';
 import { Thread } from '../models/Thread.js';
 import { SAMPLE_THREADS, type Sender, type SeedPerson } from '../data/sampleThreads.js';
+import { enqueueAnalysis } from './analysis.js';
 
 const CLIENT_NAME = 'James Carter';
 
@@ -81,9 +82,11 @@ export async function importSampleInbox(
       messages,
       isRead: !t.unread,
       isImportant: Boolean(t.important),
+      analysis: { status: 'pending' as const, updatedAt: new Date() },
     };
   });
 
-  await Thread.insertMany(docs);
+  const inserted = await Thread.insertMany(docs);
+  enqueueAnalysis(inserted.map((t) => t.id as string));
   return { account: created, imported: docs.length, created: true };
 }

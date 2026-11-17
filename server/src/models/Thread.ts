@@ -24,6 +24,8 @@ const aiSchema = new Schema(
     responsibility: { type: String, enum: [...RESPONSIBILITIES] },
     confidence: { type: Number },
     reason: { type: String },
+    uncertainty: { type: [String], default: [] },
+    model: { type: String },
     summary: { type: String },
     category: { type: String },
     actionRequired: { type: Boolean },
@@ -61,6 +63,15 @@ const clientDecisionSchema = new Schema(
   { _id: false },
 );
 
+const analysisSchema = new Schema(
+  {
+    status: { type: String, enum: ['pending', 'done', 'failed'], required: true },
+    error: { type: String },
+    updatedAt: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
 const threadSchema = new Schema(
   {
     ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
@@ -75,6 +86,7 @@ const threadSchema = new Schema(
     isArchived: { type: Boolean, default: false },
     status: { type: String, enum: [...THREAD_STATUSES], default: 'open' },
     ai: { type: aiSchema, default: undefined },
+    analysis: { type: analysisSchema, default: undefined },
     override: { type: overrideSchema, default: undefined },
     clientDecision: { type: clientDecisionSchema, default: undefined },
   },

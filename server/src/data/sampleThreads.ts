@@ -176,7 +176,7 @@ export const SAMPLE_THREADS: SeedThread[] = [
     expected: 'none',
     messages: [
       { from: 'contact', hoursAgo: 120, body: 'James, would you be open to a follow-up conversation about Northwind sometime this month?' },
-      { from: 'james', hoursAgo: 100, body: 'Thanks Julia, happy to. I will share our updated deck and a few time options early next week. Let me know what works for you.' },
+      { from: 'james', hoursAgo: 100, body: 'Thanks Julia, happy to. I have sent over our updated deck and a few time options. Let me know what works for you.' },
     ],
   },
 ];

@@ -28,7 +28,7 @@ export async function requireUser(req: Request, res: Response, next: NextFunctio
     user = await User.findOneAndUpdate(
       { email: primary.emailAddress.toLowerCase() },
       { $set: { clerkId: userId, name, imageUrl: clerkUser.imageUrl } },
-      { new: true, upsert: true },
+      { returnDocument: 'after', upsert: true },
     );
   }
 

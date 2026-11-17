@@ -2,9 +2,11 @@ import { Router } from 'express';
 import { isValidObjectId, type Types } from 'mongoose';
 import { z } from 'zod';
 import { currentUser, requireRole, requireUser } from '../middleware/requireUser.js';
-import { Thread } from '../models/Thread.js';
+import { RESPONSIBILITIES, Thread } from '../models/Thread.js';
 import { SEGMENT_KEYS, segmentFilter, type SegmentKey } from '../services/segments.js';
 import { toDetailDto, toListDto } from '../services/threads.js';
+import { enqueueAnalysis } from '../services/analysis.js';
+import { simulateIncoming } from '../services/incoming.js';
 
 export const threadsRouter = Router();
 threadsRouter.use(requireUser, requireRole('assistant'));
@@ -88,7 +90,12 @@ threadsRouter.get('/stats', async (_req, res) => {
   }
   upcoming.sort((a, b) => a.date.getTime() - b.date.getTime());
 
-  res.json({ counts, upcoming: upcoming.slice(0, 5) });
+  const [analysisPending, analysisFailed] = await Promise.all([
+    Thread.countDocuments({ ownerId: user._id, 'analysis.status': 'pending' }),
+    Thread.countDocuments({ ownerId: user._id, 'analysis.status': 'failed' }),
+  ]);
+
+  res.json({ counts, upcoming: upcoming.slice(0, 5), analysisPending, analysisFailed });
 });
 
 async function findOwned(id: string, ownerId: Types.ObjectId) {
@@ -132,4 +139,59 @@ threadsRouter.patch('/:id', async (req, res) => {
   thread.set(parsed.data);
   await thread.save();
   res.json(toDetailDto(thread));
+});
+
+const classificationSchema = z.object({ responsibility: z.enum(RESPONSIBILITIES).nullable() }).strict();
+
+// PATCH /api/threads/:id/classification: manual override (null clears it)
+threadsRouter.patch('/:id/classification', async (req, res) => {
+  const parsed = classificationSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid classification' });
+    return;
+  }
+
+  const user = currentUser(res);
+  const thread = await findOwned(req.params.id, user._id);
+  if (!thread) {
+    res.status(404).json({ error: 'Conversation not found' });
+    return;
+  }
+
+  if (parsed.data.responsibility === null) {
+    thread.override = undefined;
+  } else {
+    thread.override = { responsibility: parsed.data.responsibility, by: user._id, at: new Date() };
+  }
+  await thread.save();
+  res.json(toDetailDto(thread));
+});
+
+// POST /api/threads/:id/reclassify: ask the AI to look at the conversation again
+threadsRouter.post('/:id/reclassify', async (req, res) => {
+  const thread = await findOwned(req.params.id, currentUser(res)._id);
+  if (!thread) {
+    res.status(404).json({ error: 'Conversation not found' });
+    return;
+  }
+
+  thread.analysis = { status: 'pending', updatedAt: new Date() };
+  await thread.save();
+  enqueueAnalysis([thread.id as string], { force: true });
+  res.status(202).json(toDetailDto(thread));
+});
+
+// POST /api/threads/simulate-incoming: demo helper that delivers the next fake email
+threadsRouter.post('/simulate-incoming', async (_req, res) => {
+  const result = await simulateIncoming(currentUser(res)._id);
+
+  if (result.status === 'no-account') {
+    res.status(409).json({ error: 'Connect an email account first' });
+    return;
+  }
+  if (result.status === 'exhausted') {
+    res.status(409).json({ error: 'No more demo emails to deliver. Reset the demo data to start over.' });
+    return;
+  }
+  res.status(201).json(result);
 });

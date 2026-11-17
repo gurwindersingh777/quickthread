@@ -1,7 +1,11 @@
-
 import { env } from '../../config/env.js';
 import { groqJson, type ChatMessage } from './groq.js';
-import { rawClassificationSchema, type Classification } from './schema.js';
+import {
+  isUncertaintyFlag,
+  rawClassificationSchema,
+  type Classification,
+  type UncertaintyFlag,
+} from './schema.js';
 
 export type ClassifyMessage = {
   direction: 'incoming' | 'outgoing';
@@ -15,49 +19,103 @@ export type ClassifyInput = {
   clientName: string;
   assistantName: string;
   mailbox: string;
+  /** Email address of the other party in the conversation */
+  contactEmail: string;
   now: Date;
   messages: ClassifyMessage[];
 };
 
 const MAX_MESSAGES = 8;
 const MAX_BODY_CHARS = 1200;
+export const PROMPT_VERSION = 'v6';
+// Money commitments an AI should never settle silently: renewals, price increases, contracts
+const COMMITMENT_LANGUAGE =
+  /\b(renew\w*|price (?:increase|hike)|rate (?:increase|hike)|\d+% (?:price |rate )?increase|contract|subscription)\b/i;
 
+// Models rate their own confidence too generously, so each uncertainty flag caps it
+const CAP_ONE_FLAG = 0.6;
+const CAP_TWO_OR_MORE_FLAGS = 0.45;
+
+const FREE_MAIL = new Set([
+  'gmail.com',
+  'googlemail.com',
+  'outlook.com',
+  'hotmail.com',
+  'live.com',
+  'yahoo.com',
+  'icloud.com',
+  'me.com',
+  'proton.me',
+  'protonmail.com',
+  'aol.com',
+]);
+
+const FORWARD_MARKER = /-{3,}\s*forwarded message|^\s*begin forwarded message/im;
+const wordCount = (text: string) => text.trim().split(/\s+/).filter(Boolean).length;
+
+/**
+ * Uncertainty signals we can verify ourselves, without trusting the model.
+ * They only apply when someone is expected to reply, so notifications are never flagged.
+ */
+function computeSignals(input: ClassifyInput, responsibility: Classification['responsibility']) {
+  const flags = new Set<UncertaintyFlag>();
+  if (responsibility === 'none') return flags;
+
+  const incoming = input.messages.filter((m) => m.direction === 'incoming');
+  const last = incoming[incoming.length - 1];
+  if (!last) return flags;
+
+  const domain = input.contactEmail.split('@')[1]?.toLowerCase() ?? '';
+  const neverWroteBack = !input.messages.some((m) => m.direction === 'outgoing');
+  const unknownSender = FREE_MAIL.has(domain) && neverWroteBack;
+
+  const isForward = FORWARD_MARKER.test(last.body);
+  const ownText = isForward ? last.body.slice(last.body.search(FORWARD_MARKER)) && last.body.slice(0, last.body.search(FORWARD_MARKER)) : last.body;
+  const forwardedWithLittleComment = isForward && wordCount(ownText) < 12;
+  const veryShort = wordCount(last.body) < 25;
+
+  if (unknownSender) flags.add('unknown_sender');
+  if (forwardedWithLittleComment || (unknownSender && veryShort)) flags.add('missing_context');
+  const mailboxDomain = input.mailbox.split('@')[1]?.toLowerCase() ?? '';
+  const clientAlreadyReplied = input.messages.some(
+    (m) => m.direction === 'outgoing' && !m.fromName.includes('(for'),
+  );
+  if (domain !== mailboxDomain && !clientAlreadyReplied && COMMITMENT_LANGUAGE.test(last.body)) {
+    flags.add('authority_unclear');
+  }
+  return flags;
+}
+
+// Messages the assistant sends on the client's behalf are named "Alice (for James)"
 function authorLabel(m: ClassifyMessage) {
   if (m.direction === 'incoming') return `RECEIVED from ${m.fromName}`;
   return m.fromName.includes('(for') ? 'SENT BY ASSISTANT' : 'SENT BY CLIENT';
 }
 
 function buildSystemPrompt(input: ClassifyInput) {
-  return `You are the email triage engine inside Quickthread, a tool for personal assistants who manage a busy executive's mailbox.
+  return `You are the triage engine in Quickthread, a tool for personal assistants who manage an executive's mailbox. Read ONE email conversation and decide who must reply NEXT.
 
-Your job: read ONE email conversation and decide who must reply NEXT, then extract useful structure.
+People: the client is ${input.clientName} (the mailbox owner); the assistant is ${input.assistantName}. Messages marked SENT BY ASSISTANT were written by the assistant for the client.
 
-PEOPLE
-- Client: ${input.clientName}, the owner of the mailbox.
-- Assistant: ${input.assistantName}, who manages the mailbox on the client's behalf. Messages marked SENT BY ASSISTANT were written by the assistant for the client.
+responsibility:
+- "assistant": routine work the assistant can handle: scheduling or rescheduling, offering availability or time slots (even when the client will attend), vendor or logistics questions, routine finance admin (invoice questions, missing PO numbers, receipts, payment details, expense paperwork), sending or collecting information, follow-ups, general admin.
+- "client": only the client can answer: decisions, approvals, sensitive business, legal, financing, leadership hiring, strategy, or a request for the client's personal opinion.
+- "none": nothing to do now: newsletters, automated notices, calendar acceptances, FYIs, resolved threads (the last message is a thanks or a confirmation), or we already did what was asked and are just waiting.
 
-DECISION: "responsibility"
-- "assistant": the assistant should handle the next reply. Scheduling and rescheduling, routine business or vendor questions, invoices and logistics, collecting or sending information, following up on pending requests, general administration.
-- "client": only the client can answer. Decisions or approvals, sensitive business, legal, financing, leadership hiring, strategy, requests for the client's personal opinion, or anything that explicitly asks the client to decide.
-- "none": no reply is needed now. Newsletters, automated notifications and receipts, calendar acceptances, FYIs and status updates, resolved threads (the last message is a thanks or a confirmation), and threads where our side wrote last and we are simply waiting for the other party.
+Rules:
+1. Judge the conversation as it stands NOW, using the full history.
+2. A request is handled only when the person who must respond actually answered or did the thing. Acknowledgments and holding replies ("I'll flag this", "noted", "on the agenda") do not resolve it.
+3. Do not assume every email needs a reply. Use "none" when nothing is asked of us.
+4. If our side promised something that has not been done, someone owes work: "assistant", unless only the client can do it.
+5. If we are waiting on the other party, set waitingForReply true. If the wait is several days or follow-ups went unanswered, the owner is "assistant" (to chase).
+6. If the matter needs the client's authority, or was escalated to the client, keep "client".
 
-RULES
-1. Judge the state of the conversation NOW, using the whole history. Earlier messages may already have been answered.
-2. Do not assume every email needs a reply. Prefer "none" when nothing is being asked of us.
-3. If we are waiting for the other party, set waitingForReply to true. If the wait has been several days or follow-ups went unanswered, responsibility is "assistant" (to follow up) and waitingForReply stays true.
-4. If the assistant already escalated the matter to the client, or the ask truly needs the client, the owner stays "client".
-5. When intent is unclear (a forward with no context, a vague message from an unknown sender, a request mixing routine work with a significant decision), choose your best guess and set confidence below 0.7.
-6. Confidence: 0.9 or higher when the case is clear, 0.7 to 0.89 when likely, below 0.7 when genuinely ambiguous. Do not inflate it.
+uncertainty: list EVERY flag that applies (your confidence tends to run high, so flags matter more than the number): "unknown_sender" (unfamiliar person, no role or organization), "missing_context" (too little to tell what is being asked), "unclear_intent" (unclear what response is wanted), "authority_unclear" (the message seeks approval of NEW spending, a price change, a renewal, a contract or a commitment, and nothing shows who approved it; routine paperwork about money that is already agreed does not count)
 
-OTHER FIELDS
-- reason: one short sentence explaining why this owner, referring to specifics from the email.
-- summary: one or two neutral sentences in plain language.
-- category: one of meeting, scheduling, finance, legal, hiring, general.
-- actionRequired: true if someone on our side must do something (reply, decide, send, pay, follow up). False for purely informational email.
-- dates: dates or times that matter (meetings, deadlines). Resolve words like "tomorrow" or "Thursday" using the message timestamp. Use ISO 8601 in UTC. kind is meeting, deadline, or other. Use an empty array if there are none.
+Other fields: confidence (0 to 1); reason (one specific sentence); summary (one or two neutral sentences); category (meeting, scheduling, finance, legal, hiring, general); actionRequired (someone on our side must do something); waitingForReply; dates (meetings and deadlines resolved from message timestamps, ISO 8601 UTC, kind is meeting, deadline or other).
 
-Reply with a single JSON object and nothing else, using exactly these keys:
-{"responsibility": "assistant", "confidence": 0.0, "reason": "", "summary": "", "category": "general", "actionRequired": false, "waitingForReply": false, "dates": [{"label": "", "iso": "", "kind": "meeting"}]}`;
+Return only a JSON object with exactly these keys:
+{"responsibility": "assistant", "confidence": 0.0, "uncertainty": [], "reason": "", "summary": "", "category": "general", "actionRequired": false, "waitingForReply": false, "dates": [{"label": "", "iso": "", "kind": "meeting"}]}`;
 }
 
 function buildUserPrompt(input: ClassifyInput) {
@@ -105,9 +163,17 @@ export async function classifyConversation(input: ClassifyInput) {
           : [{ label: d.label.slice(0, 120), date, kind: d.kind }];
       });
 
+      // The model's flags plus the ones we can verify ourselves
+      const uncertainty = [
+        ...new Set([...raw.uncertainty.filter(isUncertaintyFlag), ...computeSignals(input, raw.responsibility)]),
+      ];
+      const cap =
+        uncertainty.length >= 2 ? CAP_TWO_OR_MORE_FLAGS : uncertainty.length === 1 ? CAP_ONE_FLAG : 1;
+
       const classification: Classification = {
         responsibility: raw.responsibility,
-        confidence: raw.confidence,
+        confidence: Math.min(raw.confidence, cap),
+        uncertainty,
         reason: raw.reason.slice(0, 500),
         summary: raw.summary.slice(0, 700),
         category: raw.category,

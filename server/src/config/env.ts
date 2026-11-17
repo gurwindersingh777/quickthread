@@ -7,6 +7,8 @@ const schema = z.object({
   CLIENT_URL: z.string().default('http://localhost:5173'),
   GROQ_API_KEY: z.string().optional(),
   GROQ_MODEL: z.string().default('llama-3.3-70b-versatile'),
+  GROQ_REASONING_EFFORT: z.enum(['low', 'medium', 'high']).default('low'),
+  GROQ_TPM_BUDGET: z.coerce.number().default(6500),
   CLERK_PUBLISHABLE_KEY: z.string().min(1, 'CLERK_PUBLISHABLE_KEY is required'),
   CLERK_SECRET_KEY: z.string().min(1, 'CLERK_SECRET_KEY is required'),
 });
